@@ -81,12 +81,48 @@ Raven.configure do |config|
 end
 ```
 
+
 ## Capturing Events
 
 Many implementations will automatically capture uncaught exceptions (such as Rails, Sidekiq or by using
 the Rack middleware). Sometimes you may want to catch those exceptions, but still report on them.
 
 Several helps are available to assist with this.
+
+### Use the `Raven::Rails::ControllerMethods` module to mixin easy methods
+
+Include the module in your rails application_controller.rb. For a rails app, these would be the most effective way to log an error that you have rescued as it captures the `request.env` data along with any `extra_request_vars` you may have set. For Rails apps, consider using this approach.
+
+```ruby
+require 'raven/rails/controller_methods'
+
+class ApplicationController < ActionController::Base
+  include Raven::Rails::ControllerMethods
+end
+```
+
+Then from any controller you can simply call `capture_message` or `capture_exception` to log any errors that you may have rescued
+
+```ruby
+def index
+  begin
+    e = StandardError.new("Some message")
+    raise e
+  rescue => error
+    capture_exception(error)
+  end
+end
+
+```
+
+#### Raven::Rails::ControllerMethods signature
+
+```
+capture_exception( exception, options={} )
+capture_message( message_string, options={} )
+```
+See Additional Context below for more details on the `options` argument
+
 
 ### Capture Exceptions in a Block
 
@@ -184,6 +220,37 @@ Raven.configure do |config|
   config.processors = [Raven::Processor::SanitizeData]
 end
 ```
+
+## Capturing additional request data
+
+If you are using a rack based environment like rails you can add an array of `request.env` variables
+to be captured and logged in the Request -> Environment data in the Sentry app. To do so set the 
+`extra_request_vars` property in config like so:
+
+```ruby
+require 'raven'
+
+Raven.configure do |config|
+  config.dsn = 'http://public:secret@example.com/project-id'
+  config.extra_request_vars = %w[ action_dispatch.request.parameters rack.session ]
+end
+
+```
+
+## Other configuration options
+
+There are several configuration options available see `lib/configuration.rb` for a full list. Below are a few options that you may find useful
+
+| name                  | description |
+| ----                  | ----------- |
+| `environments`        | Whitelist of environments that will send notifications to Sentry |
+| `excluded_exceptions` | Which exception types should never be sent |
+| `processors`          | Processors to run on data before sending upstream |
+| `timeout`             | Timeout when waiting for the server to return data in seconds |
+| `open_timeout`        | Timeout waiting for the connection to open in seconds |
+| `ssl_verification`    | Should the SSL certificate for the connection of the server be verified? |
+| `http_adapter`        | The [Faraday](https://rubygems.org/gems/faraday) adapter to be used. Will default to Net::HTTP when not set |
+| `extra_request_vars`  | Array of attributes to include in the 'request data' sent to Sentry. This adds to the defaults that Raven always sends |
 
 ## Command Line Interface
 
